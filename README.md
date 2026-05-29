@@ -10,18 +10,11 @@
 
 ---
 
-## Upstream compatibility status
+## Compatibility
 
-This proxy depends on two patches to OxiCloud. Both have been submitted to the official repository:
+Requires OxiCloud **0.6.0 "Open Skies"** or newer. Both upstream patches the proxy depends on ([#346](https://github.com/AtalayaLabs/OxiCloud/pull/346), [#347](https://github.com/AtalayaLabs/OxiCloud/pull/347)) are included in that release, so all features - file shares, password-protected shares, folder browsing and ZIP downloads - work out of the box.
 
-| PR | Status | What it enables |
-|---|---|---|
-| [AtalayaLabs/OxiCloud#346](https://github.com/AtalayaLabs/OxiCloud/pull/346) | **Merged** | Share-password unlock-cookie - fixes the 401 returned by the Download button on password-protected file shares. |
-| [AtalayaLabs/OxiCloud#347](https://github.com/AtalayaLabs/OxiCloud/pull/347) | **Merged** | Public folder-browsing endpoints (`/api/s/{token}/contents`, `/api/s/{token}/file/{id}`, `/api/s/{token}/zip`) - required for folder shares, in-folder streams, and ZIP downloads. |
-
-Plain file shares without a password work on any OxiCloud build. Until PR #347 lands in a release, folder-related features fall back to an error page.
-
-> *Temporary section - kept here while the patches are being upstreamed. It will be removed once both PRs are merged and released.*
+Older OxiCloud versions are not supported.
 
 ---
 
@@ -48,10 +41,10 @@ only, the same as opening a share directly on an exposed OxiCloud.
 
 A live instance is running at [oxi-demo.evtlab.pl](https://oxi-demo.evtlab.pl).
 
-- Example share: <https://oxi-demo.evtlab.pl/share/dcdb1d4f-074d-48a2-953f-04cc8d9b6f18>
+- Example share: <https://oxi-demo.evtlab.pl/share/6bb56212-e582-4fa5-989d-742562ad7520>
 - Password: `demo123`
 
-> **Note:** The running demo has full functionality because it is running on an instance that has patches deployed.
+> **Note:** The demo runs against OxiCloud 0.6.0, so all features are available.
 
 ## Features
 
