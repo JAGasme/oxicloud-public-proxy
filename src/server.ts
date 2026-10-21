@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Fastify from "fastify";
@@ -66,12 +67,21 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   });
 }
 
+const pkgVersion = (
+  JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
+    version: string;
+  }
+).version;
+
 try {
   await app.listen({ port: config.port, host: config.host });
   app.log.info(
     {
       upstream: config.oxicloudInternalUrl,
       publicBaseUrl: config.publicBaseUrl,
+      // Logged so a stale build on the edge is visible at a glance.
+      version: pkgVersion,
+      node: process.version,
     },
     "oxicloud-public-proxy listening",
   );
