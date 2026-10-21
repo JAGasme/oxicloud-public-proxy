@@ -267,8 +267,10 @@ export async function shareRoutes(
 
       switch (result.kind) {
         case "ok":
-          if (result.setCookie) {
-            reply.header("Set-Cookie", result.setCookie);
+          // An array, not one header: fetch joins multiple Set-Cookie values
+          // with ", ", which breaks cookies whose attributes contain commas.
+          if (result.setCookies.length > 0) {
+            reply.header("Set-Cookie", result.setCookies);
           }
           return reply.redirect(`/share/${encodeURIComponent(token)}`, 303);
 
