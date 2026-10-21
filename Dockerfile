@@ -1,4 +1,4 @@
-FROM node:22.22.0-alpine3.23 AS builder
+FROM node:24.22.1-alpine3.23 AS builder
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
@@ -9,7 +9,7 @@ COPY src ./src
 RUN npm run build
 RUN npm prune --omit=dev
 
-FROM node:22.22.0-alpine3.23
+FROM node:24.22.1-alpine3.23
 WORKDIR /app
 
 RUN addgroup -g 1001 -S proxy && \
