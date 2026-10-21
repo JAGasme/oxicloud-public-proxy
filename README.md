@@ -1,3 +1,11 @@
+> **Fork note (JAGasme):** this branch ports the proxy to OxiCloud >= 0.9.1,
+> which removed the `/api/s/{token}/download|contents|file|zip` endpoints. The
+> proxy now opens the share via `/api/s/{token}` (the "share ring" login),
+> keeps the ring server-side, and reads through the normal
+> `/api/folders/*` and `/api/files/*` routes that OxiCloud allowlists for
+> anonymous share sessions. Requires OxiCloud >= 0.9.1; it does not work
+> against 0.8.x/0.9.0.
+
 <p align="center">
   <img src="docs/logo.png" alt="OxiCloud" width="120" />
 </p>

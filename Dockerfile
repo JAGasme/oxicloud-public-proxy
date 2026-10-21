@@ -1,4 +1,4 @@
-FROM node:22-alpine AS builder
+FROM node:22.22.0-alpine3.23 AS builder
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
@@ -9,7 +9,7 @@ COPY src ./src
 RUN npm run build
 RUN npm prune --omit=dev
 
-FROM node:22-alpine
+FROM node:22.22.0-alpine3.23
 WORKDIR /app
 
 RUN addgroup -g 1001 -S proxy && \
@@ -26,6 +26,6 @@ ENV NODE_ENV=production
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD wget -qO- http://localhost:3000/healthcheck || exit 1
+    CMD wget -qO- http://127.0.0.1:3000/healthcheck || exit 1
 
 CMD ["node", "dist/server.js"]
