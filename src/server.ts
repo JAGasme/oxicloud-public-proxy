@@ -1,18 +1,13 @@
 import { readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import Fastify from "fastify";
-import fastifyFormbody from "@fastify/formbody";
-import fastifyStatic from "@fastify/static";
-import fastifyView from "@fastify/view";
-import ejs from "ejs";
 import { loadConfig } from "./config.js";
 import { UpstreamClient } from "./upstream.js";
-import { shareRoutes } from "./routes/share.js";
+import { buildApp } from "./app.js";
 
 const config = loadConfig();
 
-const app = Fastify({
+const app = await buildApp({
+  upstream: new UpstreamClient(config.oxicloudInternalUrl),
+  publicBaseUrl: config.publicBaseUrl,
   logger: {
     level: config.logLevel,
     transport:
@@ -20,37 +15,6 @@ const app = Fastify({
         ? undefined
         : { target: "pino-pretty", options: { translateTime: "HH:MM:ss" } },
   },
-  trustProxy: true,
-  bodyLimit: 64 * 1024,
-});
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-await app.register(fastifyFormbody);
-
-await app.register(fastifyView, {
-  engine: { ejs },
-  root: path.resolve(__dirname, "..", "views"),
-  defaultContext: {
-    publicBaseUrl: config.publicBaseUrl,
-  },
-});
-
-await app.register(fastifyStatic, {
-  root: path.resolve(__dirname, "..", "public"),
-  prefix: "/public/",
-  cacheControl: true,
-  maxAge: 86400 * 1000,
-});
-
-app.get("/", async (_req, reply) => {
-  return reply.view("index.ejs");
-});
-
-const upstream = new UpstreamClient(config.oxicloudInternalUrl);
-
-await app.register(async (instance) => {
-  await shareRoutes(instance, { upstream });
 });
 
 // ── Graceful shutdown ─────────────────────────────────────────────────────

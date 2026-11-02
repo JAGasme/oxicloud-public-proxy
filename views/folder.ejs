@@ -669,7 +669,7 @@
              data-id="<%= f.id %>"
              data-name="<%= f.name %>"
              data-mime="<%= f.mime_type || '' %>"
-             <%- kind ? 'data-mediakind="' + kind + '" data-src="' + url + '"' : '' %>>
+             <% if (kind) { %>data-mediakind="<%= kind %>" data-src="<%= url %>"<% } %>>
             <div class="card-thumb">
               <% if (kind === 'image') { %>
                 <img src="<%= url %>" alt="" decoding="async" />

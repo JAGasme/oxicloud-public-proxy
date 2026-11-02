@@ -1,6 +1,6 @@
 {
   "name": "oxicloud-public-proxy",
-  "version": "1.0.0-oxi091.2",
+  "version": "1.0.0-oxi091.3",
   "description": "Public reverse proxy for OxiCloud share links - exposes shares on a public domain while keeping OxiCloud private.",
   "type": "module",
   "main": "dist/server.js",
@@ -8,7 +8,8 @@
     "build": "tsc",
     "start": "node --env-file=.env dist/server.js",
     "dev": "tsx watch --env-file=.env src/server.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
+    "test": "node --import tsx --test test/*.test.ts"
   },
   "engines": {
     "node": ">=22"
@@ -16,9 +17,9 @@
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
     "@fastify/formbody": "^8.0.2",
-    "@fastify/static": "^10.1.6",
+    "@fastify/static": "^10.1.8",
     "@fastify/view": "^11.0.0",
-    "ejs": "^3.1.10",
+    "ejs": "^7.0.2",
     "fastify": "^5.2.1"
   },
   "devDependencies": {
@@ -27,5 +28,10 @@
     "pino-pretty": "^13.0.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"
+  },
+  "overrides": {
+    "@fastify/static": {
+      "glob": "^14.0.2"
+    }
   }
 }
