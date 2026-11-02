@@ -164,11 +164,30 @@ npm run dev
 `npm run dev` uses `tsx watch` with Node's native `--env-file`, so saving a
 file in `src/` reloads the server.
 
+```bash
+npm run typecheck   # src, plus the tests
+npm test            # node:test via tsx, against a fake OxiCloud >= 0.9.1
+```
+
+The tests drive the real app with `inject()` against an in-process fake
+OxiCloud that only answers folder/file calls carrying the share ring. They
+cover gallery rendering (normal and adversarial file ids, names and mime
+types) and the dependency versions the remediation below relies on.
+
+`package.json` overrides `glob` under `@fastify/static` to `^14.0.2`: every
+`@fastify/static` 10.x asks for `glob ^13`, and no 13.x carries the fixes for
+GHSA-3g3m-2fjr-6pw4 (glob) and GHSA-g3hv-75wg-m249 (minimatch < 11.0.1).
+`@fastify/static` only calls `glob()` with `wildcard: false`, which this app
+does not use; the call it makes is unchanged in glob 14 and is tested. Drop
+the override once `@fastify/static` depends on `glob >= 14.0.2`.
+
 ## Security notes
 
 - The proxy holds no OxiCloud admin credentials. Share tokens are the only
   authorization, same as on an exposed OxiCloud.
 - Tokens are validated with a strict regex before any upstream call.
+- Templates use only escaped EJS output (`<%= %>`); file ids, names and mime
+  types from OxiCloud are never written raw.
 - POST body size is capped at 64 KiB (the only POST is the password form).
 - The unlock cookie issued by OxiCloud after a successful password verify
   is `HttpOnly` and scoped per-share-token; the proxy passes it through
