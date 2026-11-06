@@ -2,6 +2,7 @@ import { Readable } from "node:stream";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { UpstreamClient } from "../upstream.js";
 import { type Lang, type T, makeT, resolveLang } from "../i18n.js";
+import { markAsSharedFile } from "../security.js";
 
 const TOKEN_RE = /^[A-Za-z0-9-]{1,64}$/;
 
@@ -180,6 +181,7 @@ export async function shareRoutes(
 
       reply.code(upstreamRes.status);
       forwardHeader(upstreamRes, reply, "content-type");
+      markAsSharedFile(reply);
       forwardHeader(upstreamRes, reply, "content-length");
       forwardHeader(upstreamRes, reply, "content-disposition");
       forwardHeader(upstreamRes, reply, "content-range");
@@ -227,6 +229,7 @@ export async function shareRoutes(
 
     reply.code(upstreamRes.status);
     forwardHeader(upstreamRes, reply, "content-type");
+    markAsSharedFile(reply);
     forwardHeader(upstreamRes, reply, "content-length");
     forwardHeader(upstreamRes, reply, "content-disposition");
 
@@ -319,6 +322,7 @@ export async function shareRoutes(
 
     reply.code(upstreamRes.status);
     forwardHeader(upstreamRes, reply, "content-type");
+    markAsSharedFile(reply);
     forwardHeader(upstreamRes, reply, "content-length");
     forwardHeader(upstreamRes, reply, "content-disposition");
     forwardHeader(upstreamRes, reply, "content-range");

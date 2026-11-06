@@ -111,7 +111,13 @@ git clone https://github.com/JAGasme/oxicloud-public-proxy.git
 cd oxicloud-public-proxy
 cp .env.example .env
 # edit .env, set OXICLOUD_INTERNAL_URL and PUBLIC_BASE_URL
-docker compose up -d            # pulls the GHCR image; add --build to build locally
+docker compose up -d            # pulls the published GHCR image
+```
+
+To build from the checkout instead (tagged `oxicloud-public-proxy:local`):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ```
 
 Point your reverse proxy at `localhost:3000` and route your public hostname
@@ -126,6 +132,7 @@ there. The proxy itself does not terminate TLS.
 | `PORT` | `3000` | no | TCP port. Used for both the host port mapping in `docker-compose.yml` and the in-container listener, so they stay in sync. |
 | `HOST` | `0.0.0.0` | no | Bind address. Default is right for containers. |
 | `LOG_LEVEL` | `info` | no | One of `fatal`, `error`, `warn`, `info`, `debug`, `trace`. |
+| `HSTS_MAX_AGE` | `31536000` | no | `Strict-Transport-Security` max-age in seconds, sent only on HTTPS requests (per `X-Forwarded-Proto`). `0` disables it, e.g. if your reverse proxy already sets HSTS. |
 
 See `.env.example` for a copy-and-edit starting point.
 
@@ -218,6 +225,12 @@ the override once `@fastify/static` depends on `glob >= 14.0.2`.
 - The unlock cookie issued by OxiCloud after a successful password verify
   is `HttpOnly` and scoped per-share-token; the proxy passes it through
   unmodified.
+- Every response carries hardening headers: a strict `Content-Security-Policy`
+  on the proxy's pages (no inline script or style, no `eval`), HSTS on HTTPS,
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` (share
+  URLs contain the token) and `X-Frame-Options: DENY`. Shared files are
+  streamed with a CSP that blocks scripts, so an uploaded HTML or SVG file
+  cannot run code on the proxy's origin.
 - TLS is the responsibility of the reverse proxy in front. The proxy itself
   speaks plain HTTP on a private port.
 

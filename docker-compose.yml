@@ -2,9 +2,10 @@
 
 services:
   oxicloud-public-proxy:
-    # `docker compose up -d` pulls the published image; add `--build` to
-    # build from this checkout instead. Bump the tag with each release.
-    build: .
+    # The published release image. Bump the tag with each release. To build
+    # from this checkout instead, add the override (tags the image `:local`,
+    # so a local build never masquerades as a release):
+    #   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
     image: ghcr.io/jagasme/oxicloud-public-proxy:1.0.0-oxi091.3
     restart: unless-stopped
     ports:
