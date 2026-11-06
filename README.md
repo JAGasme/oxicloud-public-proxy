@@ -16,13 +16,39 @@
   Public reverse proxy for <a href="https://github.com/AtalayaLabs/OxiCloud">OxiCloud</a> share links.
 </p>
 
+<p align="center">
+  <a href="https://github.com/JAGasme/oxicloud-public-proxy/actions/workflows/ci.yml"><img src="https://github.com/JAGasme/oxicloud-public-proxy/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/JAGasme/oxicloud-public-proxy/actions/workflows/codeql.yml"><img src="https://github.com/JAGasme/oxicloud-public-proxy/actions/workflows/codeql.yml/badge.svg" alt="CodeQL" /></a>
+  <a href="https://github.com/JAGasme/oxicloud-public-proxy/releases"><img src="https://img.shields.io/github/v/release/JAGasme/oxicloud-public-proxy?include_prereleases" alt="Release" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/JAGasme/oxicloud-public-proxy" alt="MIT License" /></a>
+</p>
+
 ---
 
 ## Compatibility
 
-Requires OxiCloud **0.6.0 "Open Skies"** or newer. Both upstream patches the proxy depends on ([#346](https://github.com/AtalayaLabs/OxiCloud/pull/346), [#347](https://github.com/AtalayaLabs/OxiCloud/pull/347)) are included in that release, so all features - file shares, password-protected shares, folder browsing and ZIP downloads - work out of the box.
+| Proxy | OxiCloud |
+|---|---|
+| `1.0.0-oxi091.*` (this fork) | **0.9.1** or newer. Does not work against 0.8.x/0.9.0 |
+| [upstream](https://github.com/abnvle/oxicloud-public-proxy) `1.0.0` | 0.6.0 "Open Skies" up to 0.9.0 |
 
-Older OxiCloud versions are not supported.
+All features (file shares, password-protected shares, folder browsing and
+ZIP downloads) work on the supported OxiCloud versions.
+
+## Container image
+
+Multi-arch images (`linux/amd64`, `linux/arm64`) are published to GHCR on
+every release, with an SBOM, build provenance and a cosign signature:
+
+```bash
+docker pull ghcr.io/jagasme/oxicloud-public-proxy:1.0.0-oxi091.3
+```
+
+Tags: the full version (`1.0.0-oxi091.3`), and the release line
+(`1.0.0-oxi091`), which moves to the newest patch. There is no `latest` tag.
+Pin by digest for reproducible deploys; each
+[release](https://github.com/JAGasme/oxicloud-public-proxy/releases) lists the
+digest and the `cosign verify` command.
 
 ---
 
@@ -81,11 +107,11 @@ For local development without Docker: Node 22+ and `npm`.
 ## Quick start
 
 ```bash
-git clone https://github.com/abnvle/oxicloud-public-proxy.git
+git clone https://github.com/JAGasme/oxicloud-public-proxy.git
 cd oxicloud-public-proxy
 cp .env.example .env
 # edit .env, set OXICLOUD_INTERNAL_URL and PUBLIC_BASE_URL
-docker compose up -d --build
+docker compose up -d            # pulls the GHCR image; add --build to build locally
 ```
 
 Point your reverse proxy at `localhost:3000` and route your public hostname
@@ -194,6 +220,14 @@ the override once `@fastify/static` depends on `glob >= 14.0.2`.
   unmodified.
 - TLS is the responsibility of the reverse proxy in front. The proxy itself
   speaks plain HTTP on a private port.
+
+## Contributing
+
+Issues and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
+Report vulnerabilities privately, as described in [SECURITY.md](SECURITY.md).
+
+This fork tracks [abnvle/oxicloud-public-proxy](https://github.com/abnvle/oxicloud-public-proxy),
+the original project by abnvle; thanks to them for it.
 
 ## License
 

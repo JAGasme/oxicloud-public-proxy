@@ -1,0 +1,56 @@
+name: Bug report
+description: Something in the proxy does not work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please **remove share tokens, passwords and
+        hostnames** you do not want public from logs and URLs below.
+  - type: input
+    id: proxy-version
+    attributes:
+      label: Proxy version
+      description: Image tag, or the `version` from the "listening" startup log line.
+      placeholder: 1.0.0-oxi091.3
+    validations:
+      required: true
+  - type: input
+    id: oxicloud-version
+    attributes:
+      label: OxiCloud version
+      placeholder: 0.9.1
+    validations:
+      required: true
+  - type: dropdown
+    id: share-type
+    attributes:
+      label: Share type
+      multiple: true
+      options:
+        - File
+        - Folder
+        - Password-protected
+        - Expired
+        - Not share-specific
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+  - type: textarea
+    id: logs
+    attributes:
+      label: Proxy logs
+      description: "`docker compose logs oxicloud-public-proxy`, ideally with `LOG_LEVEL=debug`."
+      render: text
+  - type: textarea
+    id: setup
+    attributes:
+      label: Deployment
+      description: Reverse proxy in front (Traefik, nginx, Caddy...), how the proxy reaches OxiCloud, architecture (amd64/arm64).

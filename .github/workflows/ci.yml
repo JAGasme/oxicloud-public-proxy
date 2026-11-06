@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # package.json promises ">=22"; 24 is what the image ships.
+        node: ["22", "24"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm test
+
+  docker:
+    name: Docker build + smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          load: true
+          push: false
+          tags: oxicloud-public-proxy:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Start container and wait for the image HEALTHCHECK
+        # No OxiCloud is needed for liveness: /healthcheck does not call
+        # upstream. This catches a broken Dockerfile (missing views/, public/,
+        # dist/) or a crash at startup.
+        run: |
+          docker run -d --name proxy -p 3000:3000 \
+            -e OXICLOUD_INTERNAL_URL=http://127.0.0.1:9 \
+            -e PUBLIC_BASE_URL=http://localhost:3000 \
+            oxicloud-public-proxy:ci
+          for _ in $(seq 1 30); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' proxy)
+            [ "$status" = healthy ] && break
+            [ "$(docker inspect -f '{{.State.Running}}' proxy)" = true ] || break
+            sleep 2
+          done
+          docker logs proxy
+          test "$status" = healthy
+          curl --fail --silent --show-error http://127.0.0.1:3000/healthcheck
+          curl --fail --silent --show-error -o /dev/null http://127.0.0.1:3000/
+      - name: Container runs as non-root
+        run: test "$(docker exec proxy id -u)" = 1001
