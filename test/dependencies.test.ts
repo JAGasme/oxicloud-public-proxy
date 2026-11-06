@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -13,7 +14,8 @@ import { UpstreamClient } from "../src/upstream.js";
 // Guards for the dependency remediation: ejs >= 5 has no runtime deps (the
 // jake > filelist > minimatch@5 chain is gone), and @fastify/static's glob is
 // overridden to a release with the AbortSignal fix (GHSA-3g3m-2fjr-6pw4) and
-// minimatch >= 11.0.1 (GHSA-g3hv-75wg-m249).
+// minimatch >= 11.0.1 (GHSA-g3hv-75wg-m249). fastify >= 5.12.8 fixes the
+// handlerTimeout + streaming reply crash (GHSA-3qgw-9275-xf8w).
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(path.join(rootDir, "package.json"));
@@ -54,6 +56,40 @@ describe("resolved dependency versions", () => {
     const globPkg = createRequire(staticPkg).resolve("glob/package.json");
     const minimatch = versionOf("minimatch", globPkg);
     assert.ok(atLeast(minimatch, "11.0.1"), `minimatch ${minimatch}`);
+  });
+});
+
+describe("fastify handlerTimeout with streaming replies", () => {
+  it("resolves a patched fastify", () => {
+    const fastify = versionOf("fastify", path.join(rootDir, "package.json"));
+    assert.ok(atLeast(fastify, "5.12.8"), `fastify ${fastify}`);
+  });
+
+  it("the app keeps handlerTimeout off (the default)", async () => {
+    const app = await buildApp({
+      upstream: new UpstreamClient("http://127.0.0.1:9"),
+      publicBaseUrl: "https://share.example",
+    });
+    try {
+      // initialConfig exposes it at runtime, but its type omits the key.
+      assert.equal((app.initialConfig as { handlerTimeout?: number }).handlerTimeout, 0);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("survives a stream still open when handlerTimeout fires", async () => {
+    const script = path.join(rootDir, "test", "fixtures", "handler-timeout-stream.mjs");
+    const { code, stdout, stderr } = await new Promise<{ code: number | null; stdout: string; stderr: string }>(
+      (resolve) => {
+        execFile(process.execPath, [script], { cwd: rootDir, timeout: 10_000 }, (err, stdout, stderr) => {
+          resolve({ code: err ? ((err as { code?: number }).code ?? 1) : 0, stdout, stderr });
+        });
+      },
+    );
+    assert.doesNotMatch(stderr, /ERR_HTTP_HEADERS_SENT/);
+    assert.equal(code, 0, stderr);
+    assert.match(stdout, /SURVIVED/);
   });
 });
 
