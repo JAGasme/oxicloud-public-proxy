@@ -8,6 +8,7 @@ const config = loadConfig();
 const app = await buildApp({
   upstream: new UpstreamClient(config.oxicloudInternalUrl),
   publicBaseUrl: config.publicBaseUrl,
+  hstsMaxAge: config.hstsMaxAge,
   logger: {
     level: config.logLevel,
     transport:

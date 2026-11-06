@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
@@ -7,14 +8,22 @@ import fastifyView from "@fastify/view";
 import ejs from "ejs";
 import type { UpstreamClient } from "./upstream.js";
 import { shareRoutes } from "./routes/share.js";
+import { registerSecurityHeaders } from "./security.js";
 
 export interface BuildAppOptions {
   upstream: UpstreamClient;
   publicBaseUrl: string;
   logger?: FastifyServerOptions["logger"];
+  /** Strict-Transport-Security max-age in seconds; 0 disables. Default 1 year. */
+  hstsMaxAge?: number;
 }
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+// Appended to /public asset URLs so a release busts the 1-day static cache.
+const assetVersion = (
+  JSON.parse(readFileSync(path.join(rootDir, "package.json"), "utf8")) as { version: string }
+).version;
 
 /** The proxy without listen() or signal handling, so tests can inject(). */
 export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> {
@@ -24,6 +33,9 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
     bodyLimit: 64 * 1024,
   });
 
+  // First, so the headers also cover static files and 404s.
+  registerSecurityHeaders(app, { hstsMaxAge: opts.hstsMaxAge ?? 31536000 });
+
   await app.register(fastifyFormbody);
 
   await app.register(fastifyView, {
@@ -31,6 +43,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
     root: path.join(rootDir, "views"),
     defaultContext: {
       publicBaseUrl: opts.publicBaseUrl,
+      assetVersion: encodeURIComponent(assetVersion),
     },
   });
 

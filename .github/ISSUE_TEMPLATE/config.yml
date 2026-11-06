@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/JAGasme/oxicloud-public-proxy/security/advisories/new
+    about: Please report vulnerabilities privately, not as a public issue.
+  - name: OxiCloud itself
+    url: https://github.com/AtalayaLabs/OxiCloud/issues
+    about: Problems with OxiCloud (not the share proxy) belong upstream.
