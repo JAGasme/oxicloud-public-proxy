@@ -8,6 +8,12 @@ updates:
     cooldown:
       default-days: 3 # let fresh releases settle (and get yanked if malicious)
     labels: [dependencies]
+    ignore:
+      # Newer types than the runtimes we support (engines ">=22") let tsc
+      # accept APIs that crash on Node 22. Bump the major by hand, only when
+      # the engines floor moves.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     groups:
       npm-minor-patch:
         update-types: [minor, patch]

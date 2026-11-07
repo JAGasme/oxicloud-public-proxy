@@ -20,8 +20,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # package.json promises ">=22"; 24 is what the image ships.
-        node: ["22", "24"]
+        # package.json promises ">=22"; 26 (LTS since 2026-10) is what the image
+        # ships once the node:26 Dockerfile bump lands.
+        node: ["22", "24", "26"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
