@@ -6,7 +6,7 @@ services:
     # from this checkout instead, add the override (tags the image `:local`,
     # so a local build never masquerades as a release):
     #   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
-    image: ghcr.io/jagasme/oxicloud-public-proxy:1.0.0-oxi091.3
+    image: ghcr.io/jagasme/oxicloud-public-proxy:2.0.0
     restart: unless-stopped
     ports:
       - "${PORT:-3000}:${PORT:-3000}"

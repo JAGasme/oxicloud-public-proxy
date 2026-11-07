@@ -28,10 +28,22 @@ or response field, teach the fake about it and add a test.
 
 ## Versioning
 
-Versions follow `<upstream base>-oxi<OxiCloud line>.<fork patch>`, for example
-`1.0.0-oxi091.3`: based on upstream 1.0.0, targeting OxiCloud 0.9.1, third
-fork release. Maintainers bump `package.json`, then push a matching `v` tag;
-the Release workflow publishes the image and the GitHub Release.
+Releases follow [Semantic Versioning](https://semver.org/), starting at
+`2.0.0` (the fork's first own line; upstream's last release was 1.0.0):
+
+- **patch** (`2.0.1`): fixes and dependency updates, drop-in compatible.
+- **minor** (`2.1.0`): new features, still compatible.
+- **major** (`3.0.0`): anything that breaks an existing deploy, including
+  dropping support for an OxiCloud version.
+
+Supported OxiCloud versions are listed in the README's Compatibility table,
+not encoded in the version. Maintainers bump `package.json`, then push a
+matching `v` tag; the Release workflow publishes the image and the GitHub
+Release.
+
+Releases before 2.0.0 were tagged `1.0.0-oxi091.N`. Those images stay
+published, but under semver they sort *before* 1.0.0, which is why the
+scheme changed.
 
 ## License
 
