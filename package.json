@@ -15,7 +15,7 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@fastify/cookie": "^11.0.2",
+    "@fastify/cookie": "^11.1.5",
     "@fastify/formbody": "^8.0.2",
     "@fastify/static": "^10.1.8",
     "@fastify/view": "^11.0.0",
