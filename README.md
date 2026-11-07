@@ -29,7 +29,7 @@
 
 | Proxy | OxiCloud |
 |---|---|
-| `1.0.0-oxi091.*` (this fork) | **0.9.1** or newer. Does not work against 0.8.x/0.9.0 |
+| `2.x` (this fork; formerly tagged `1.0.0-oxi091.*`) | **0.9.1** or newer. Does not work against 0.8.x/0.9.0 |
 | [upstream](https://github.com/abnvle/oxicloud-public-proxy) `1.0.0` | 0.6.0 "Open Skies" up to 0.9.0 |
 
 All features (file shares, password-protected shares, folder browsing and
@@ -41,11 +41,11 @@ Multi-arch images (`linux/amd64`, `linux/arm64`) are published to GHCR on
 every release, with an SBOM, build provenance and a cosign signature:
 
 ```bash
-docker pull ghcr.io/jagasme/oxicloud-public-proxy:1.0.0-oxi091.3
+docker pull ghcr.io/jagasme/oxicloud-public-proxy:2.0.0
 ```
 
-Tags: the full version (`1.0.0-oxi091.3`), and the release line
-(`1.0.0-oxi091`), which moves to the newest patch. There is no `latest` tag.
+Tags: the full version (`2.0.0`), plus `2.0` and `2`, which move to the
+newest release in that line. There is no `latest` tag.
 Pin by digest for reproducible deploys; each
 [release](https://github.com/JAGasme/oxicloud-public-proxy/releases) lists the
 digest and the `cosign verify` command.

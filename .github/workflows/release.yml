@@ -1,7 +1,7 @@
 name: Release
 
 # Push a tag matching package.json "version", e.g.:
-#   git tag v1.0.0-oxi091.3 && git push origin v1.0.0-oxi091.3
+#   git tag v2.0.0 && git push origin v2.0.0
 # Publishes ghcr.io/<owner>/oxicloud-public-proxy for amd64 + arm64, signs it
 # with cosign (keyless), and creates a GitHub Release with generated notes.
 
@@ -76,12 +76,19 @@ jobs:
         id: ver
         env:
           TAG: ${{ github.ref_name }}
-        # v1.0.0-oxi091.3 -> version 1.0.0-oxi091.3, line 1.0.0-oxi091.
-        # The line tag moves with each fork patch release; no "latest" tag.
+        # v2.0.1 -> tags 2.0.1, 2.0 and 2. The 2.0 and 2 tags move to the
+        # newest release in that line; no "latest" tag. A pre-release
+        # (v2.1.0-rc.1) gets only its full tag, so it never moves 2.1 or 2.
         run: |
           version="${TAG#v}"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "line=${version%.*}" >> "$GITHUB_OUTPUT"
+          if [[ "$version" == *-* ]]; then
+            echo "minor=" >> "$GITHUB_OUTPUT"
+            echo "major=" >> "$GITHUB_OUTPUT"
+          else
+            echo "minor=${version%.*}" >> "$GITHUB_OUTPUT"
+            echo "major=${version%%.*}" >> "$GITHUB_OUTPUT"
+          fi
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
@@ -89,7 +96,8 @@ jobs:
           flavor: latest=false
           tags: |
             type=raw,value=${{ steps.ver.outputs.version }}
-            type=raw,value=${{ steps.ver.outputs.line }},enable=${{ steps.ver.outputs.line != steps.ver.outputs.version }}
+            type=raw,value=${{ steps.ver.outputs.minor }},enable=${{ steps.ver.outputs.minor != '' }}
+            type=raw,value=${{ steps.ver.outputs.major }},enable=${{ steps.ver.outputs.major != '' }}
       - id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:

@@ -12,7 +12,7 @@ body:
     attributes:
       label: Proxy version
       description: Image tag, or the `version` from the "listening" startup log line.
-      placeholder: 1.0.0-oxi091.3
+      placeholder: 2.0.0
     validations:
       required: true
   - type: input
