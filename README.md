@@ -172,12 +172,12 @@ before it forwards anything:
 
 - per client (`AUTH_RATE_LIMIT_PER_IP`), counting everything but correct
   passwords and OxiCloud 429s: unknown tokens and failed checks included;
-- per share (`AUTH_RATE_LIMIT_PER_TOKEN`), counting wrong passwords, checks
-  whose outcome is unknown (timeout, error), and checks in flight. A share
-  is only recorded when OxiCloud answers 401, which it does only for a real,
-  unexpired, password-protected share, or when it doesn't answer properly. Made-up
-  tokens cannot fill this table, and a share under attack is never evicted
-  from it;
+- per share (`AUTH_RATE_LIMIT_PER_TOKEN`), counting wrong passwords and
+  checks in flight. Once a share has a wrong guess recorded, checks whose
+  outcome is unknown (timeout, error) count too. A share is only recorded
+  when OxiCloud answers 401, which it does only for a real, unexpired,
+  password-protected share. So made-up tokens cannot fill this table, even
+  while OxiCloud is down, and a share under attack is never evicted from it;
 - per OxiCloud rate-limit key (`UPSTREAM_VERIFY_MAX`), counting every check
   the way OxiCloud does, so OxiCloud's own limit is never reached. If OxiCloud
   answers `429` anyway, the proxy waits out its `Retry-After` and does not

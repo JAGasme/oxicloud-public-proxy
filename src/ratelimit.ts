@@ -94,8 +94,16 @@ export class SlidingWindowLimiter {
   }
 }
 
+/**
+ * How a password check ended, for the per-share limit: `failed` is a 401 (a
+ * real share, wrong password); `unknown` is a timeout, error or 5xx (OxiCloud
+ * may or may not have tested it, and may not even know the token); `none` is
+ * anything else (correct password, unknown token, 429...).
+ */
+export type Outcome = "failed" | "unknown" | "none";
+
 export type Attempt =
-  | { ok: true; done: (failed: boolean) => void }
+  | { ok: true; done: (outcome: Outcome) => void }
   | { ok: false; retryAfter: number };
 
 /**
@@ -105,12 +113,16 @@ export type Attempt =
  * Unlike the per-client limit, this one must not forget a share that is
  * being guessed, or flooding the table with other keys would buy more
  * guesses. So:
- *  - a token is only recorded (`done(true)`) on a 401, which OxiCloud returns
- *    only for an existing, unexpired, password-protected share, or on a check
- *    whose outcome is unknown (timeout, error), since OxiCloud may still have
- *    tested the password. Unknown, expired and password-less tokens that
- *    OxiCloud answers never enter the table, so a flood of made-up tokens
- *    cannot fill it (timeouts are bounded by the in-flight cap);
+ *  - a token enters the table only on a 401 (`done("failed")`), which
+ *    OxiCloud returns only for an existing, unexpired, password-protected
+ *    share. Unknown, expired and password-less tokens never enter it, so a
+ *    flood of made-up tokens cannot fill it;
+ *  - a check with an unknown outcome (`done("unknown")`: timeout, error, 5xx)
+ *    counts only for a share already in the table, i.e. one proven real and
+ *    being guessed: OxiCloud may have tested the password. For any other
+ *    token it is not recorded, or an outage would let made-up tokens fill
+ *    the table. Such a check never shows its result to the client, and the
+ *    per-client limit and the in-flight cap still bound them;
  *  - checks in flight are counted separately and always removed when they
  *    finish, so concurrent requests cannot overshoot `max` or fill the table;
  *  - live entries are never evicted. Past `maxKeys` live shares, NEW shares
@@ -139,7 +151,8 @@ export class ShareFailureLimiter {
     const live = this.live(key, now);
     const pending = this.inFlight.get(key) ?? 0;
     if (live.length + pending >= this.max) {
-      // All in flight and none recorded yet: they finish in well under 1 s.
+      // All in flight and none recorded yet: they finish within the upstream
+      // timeout, normally well under a second.
       return { ok: false, retryAfter: live.length ? secondsUntil(live[0]! + this.windowMs, now) : 1 };
     }
     if (live.length === 0 && this.full(now)) {
@@ -149,15 +162,16 @@ export class ShareFailureLimiter {
     let finished = false;
     return {
       ok: true,
-      done: (failed: boolean) => {
+      done: (outcome: Outcome) => {
         if (finished) return;
         finished = true;
         const left = (this.inFlight.get(key) ?? 1) - 1;
         if (left > 0) this.inFlight.set(key, left);
         else this.inFlight.delete(key);
-        if (!failed) return;
+        if (outcome === "none") return;
         const at = this.now();
         const list = this.live(key, at);
+        if (outcome === "unknown" && list.length === 0) return;
         list.push(at);
         this.failures.set(key, list);
       },

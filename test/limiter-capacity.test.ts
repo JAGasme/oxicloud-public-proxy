@@ -19,14 +19,14 @@ describe("ShareFailureLimiter", () => {
     for (let i = 0; i < 10; i++) {
       const a = l.begin("t");
       assert.ok(a.ok);
-      a.done(false); // unknown token, correct password, upstream error...
+      a.done("none"); // unknown token, correct password, upstream error...
     }
     const held = [l.begin("t"), l.begin("t"), l.begin("t")];
     assert.ok(held.every((a) => a.ok));
     const refused = l.begin("t");
     assert.ok(!refused.ok, "in-flight checks count");
     assert.equal(refused.retryAfter, 1);
-    for (const a of held) if (a.ok) a.done(true);
+    for (const a of held) if (a.ok) a.done("failed");
     const capped = l.begin("t");
     assert.ok(!capped.ok);
     assert.equal(capped.retryAfter, 60);
@@ -34,12 +34,26 @@ describe("ShareFailureLimiter", () => {
     assert.ok(l.begin("t").ok, "failures age out");
   });
 
+  it("an unknown outcome counts only for a share already being guessed", () => {
+    const l = new ShareFailureLimiter(2, 60_000, () => 0, 5);
+    for (let i = 0; i < 100; i++) {
+      const a = l.begin(`err-${i}`);
+      assert.ok(a.ok, "untracked tokens never fill the table");
+      a.done("unknown");
+    }
+    const first = l.begin("target");
+    if (first.ok) first.done("failed");
+    const second = l.begin("target");
+    if (second.ok) second.done("unknown");
+    assert.ok(!l.begin("target").ok, "1 failure + 1 unknown = cap of 2");
+  });
+
   it("done() is idempotent", () => {
     const l = new ShareFailureLimiter(1, 60_000);
     const a = l.begin("t");
     assert.ok(a.ok);
-    a.done(false);
-    a.done(true);
+    a.done("none");
+    a.done("failed");
     assert.ok(l.begin("t").ok);
   });
 
@@ -48,13 +62,13 @@ describe("ShareFailureLimiter", () => {
     const l = new ShareFailureLimiter(3, 60_000, () => now, 50);
     for (let i = 0; i < 3; i++) {
       const a = l.begin("target");
-      if (a.ok) a.done(true);
+      if (a.ok) a.done("failed");
     }
     for (let i = 0; i < 100_000; i++) {
       now += 0.1;
       const a = l.begin(`bogus-${i}`);
       assert.ok(a.ok, "unknown tokens are never refused for capacity");
-      a.done(false);
+      a.done("none");
     }
     assert.ok(!l.begin("target").ok);
   });
@@ -64,7 +78,7 @@ describe("ShareFailureLimiter", () => {
     const l = new ShareFailureLimiter(3, 60_000, () => now, 50);
     const fail = (key: string) => {
       const a = l.begin(key);
-      if (a.ok) a.done(true);
+      if (a.ok) a.done("failed");
       return a.ok;
     };
     for (let i = 0; i < 3; i++) fail("target");
@@ -265,9 +279,9 @@ describe("password checks in flight (slow or hung OxiCloud)", () => {
     }
   });
 
-  it("a hung OxiCloud times out; the check counts, the slot is freed", async () => {
-    const { fake, app, close } = await setup({
-      limits: { maxConcurrent: 1, perToken: 2, perIp: 2 },
+  it("a hung OxiCloud times out and frees the slot; the client is charged", async () => {
+    const { app, close } = await setup({
+      limits: { maxConcurrent: 1, perIp: 2 },
       fake: { verifyDelayMs: 5_000 },
       verifyTimeoutMs: 100,
     });
@@ -277,25 +291,54 @@ describe("password checks in flight (slow or hung OxiCloud)", () => {
       assert.ok(Date.now() - started < 2_000, "did not wait for OxiCloud");
       assert.equal(res.statusCode, 502);
       assert.match(res.body, /Something went wrong/);
-      // The concurrency slot is free again at once...
+      // The concurrency slot is free again at once.
       assert.equal((await post(app, "pw-1", "wrong", "203.0.113.91")).statusCode, 502);
-      // ...but OxiCloud may have tested those passwords, so they count: the
-      // share has one check left, and so does the first client.
-      assert.equal((await post(app, PW_TOKEN, "wrong", "203.0.113.92")).statusCode, 502);
-      assert.equal((await post(app, PW_TOKEN, "wrong", "203.0.113.93")).statusCode, 429);
+      // OxiCloud may have tested those passwords: they count for the client.
       assert.equal((await post(app, "pw-2", "wrong", "203.0.113.90")).statusCode, 502);
       assert.equal((await post(app, "pw-3", "wrong", "203.0.113.90")).statusCode, 429);
-      assert.equal(fake.verifies.length, 4);
     } finally {
       await close();
     }
   });
 
-  it("a 5xx from OxiCloud counts against the share and the client", async () => {
-    const { app, close } = await setup({ limits: { perToken: 1, perIp: 1 } });
+  it("a timeout counts against a share already being guessed", async () => {
+    const { fake, app, close } = await setup({
+      limits: { perToken: 3 },
+      fake: { verifyDelayMs: 5_000, slowPassword: "slow" },
+      verifyTimeoutMs: 100,
+    });
+    try {
+      assert.equal((await post(app, PW_TOKEN, "wrong")).statusCode, 200); // 401: tracked
+      assert.equal((await post(app, PW_TOKEN, "slow")).statusCode, 502); // counts
+      assert.equal((await post(app, PW_TOKEN, "slow")).statusCode, 502); // counts
+      assert.equal((await post(app, PW_TOKEN, "wrong")).statusCode, 429);
+      assert.equal(fake.verifies.length, 3);
+    } finally {
+      await close();
+    }
+  });
+
+  it("errors on made-up tokens during an outage cannot fill the share table", async () => {
+    // maxShareKeys is 20: 100 failing tokens would fill it if recorded.
+    const { app, close } = await setup({ limits: { perToken: 1 } });
+    try {
+      for (let i = 0; i < 100; i++) {
+        assert.equal((await post(app, `err-${i}`)).statusCode, 502);
+      }
+      assert.equal((await post(app, "err-0")).statusCode, 502, "untracked: not capped");
+      // After "recovery", new real shares are still accepted.
+      for (let i = 0; i < 19; i++) {
+        assert.equal((await post(app, `pw-${i}`)).statusCode, 200);
+      }
+    } finally {
+      await close();
+    }
+  });
+
+  it("a 5xx counts against the client", async () => {
+    const { app, close } = await setup({ limits: { perIp: 1 } });
     try {
       assert.equal((await post(app, "tok-500", "wrong", "203.0.113.95")).statusCode, 502);
-      assert.equal((await post(app, "tok-500", "wrong", "203.0.113.96")).statusCode, 429);
       assert.equal((await post(app, "no-such", "wrong", "203.0.113.95")).statusCode, 429);
     } finally {
       await close();

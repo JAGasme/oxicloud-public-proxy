@@ -5,6 +5,7 @@ import { type Lang, type T, makeT, resolveLang } from "../i18n.js";
 import { markAsPasswordForm, markAsSharedFile } from "../security.js";
 import type { AuthRateLimit } from "../config.js";
 import {
+  type Outcome,
   ShareFailureLimiter,
   SlidingWindowLimiter,
   UpstreamBudget,
@@ -312,7 +313,7 @@ export async function shareRoutes(
       }
       if (limits.maxConcurrent > 0 && verifyInFlight >= limits.maxConcurrent) {
         byIp.release();
-        byToken.done(false);
+        byToken.done("none");
         req.log.warn({ verifyInFlight }, "password check held back: too many in flight");
         return rateLimited(1);
       }
@@ -321,17 +322,15 @@ export async function shareRoutes(
       const budget = upstreamBudget.acquire(upstreamKey);
       if (!budget.ok) {
         byIp.release();
-        byToken.done(false);
+        byToken.done("none");
         req.log.warn({ retryAfter: budget.retryAfter }, "password check held back: upstream budget spent");
         return rateLimited(budget.retryAfter);
       }
 
-      // What counts against the share: a 401, which OxiCloud sends only for a
-      // real, unexpired, password-protected share, and any check whose outcome
-      // is unknown (timeout, connection error, 5xx, a throw): OxiCloud may
-      // still have tested the password. Unknown, expired and password-less
-      // tokens and correct passwords do not (see ShareFailureLimiter).
-      let countsForShare = true;
+      // Against the share: a 401 (a real share, wrong password) and, for a
+      // share already being guessed, any check with an unknown outcome
+      // (timeout, error, 5xx, a throw). See ShareFailureLimiter.
+      let outcome: Outcome = "unknown";
       let result: Awaited<ReturnType<UpstreamClient["verifyPassword"]>>;
       verifyInFlight++;
       try {
@@ -340,10 +339,15 @@ export async function shareRoutes(
           password,
           deps.forwardClientIp ? ip : undefined,
         );
-        countsForShare = result.kind === "wrong-password" || result.kind === "upstream-error";
+        outcome =
+          result.kind === "wrong-password"
+            ? "failed"
+            : result.kind === "upstream-error"
+              ? "unknown"
+              : "none";
       } finally {
         verifyInFlight--;
-        byToken.done(countsForShare);
+        byToken.done(outcome);
       }
       // Against the visitor, everything but a correct password and a 429
       // (OxiCloud's limiter answers before testing anything) counts, unknown

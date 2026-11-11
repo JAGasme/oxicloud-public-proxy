@@ -25,8 +25,10 @@ export interface FakeOptions {
   verifyMax?: number;
   trustXff?: boolean;
   fileShare?: FakeResource;
-  /** Delay every /verify answer by this long (a slow OxiCloud). */
+  /** Delay /verify answers by this long (a slow OxiCloud)... */
   verifyDelayMs?: number;
+  /** ...or only those for this password, if set. */
+  slowPassword?: string;
 }
 
 export interface VerifyCall {
@@ -82,7 +84,9 @@ export async function startFakeOxiCloud(
       const xff = req.headers["x-forwarded-for"] as string | undefined;
       const password = (JSON.parse(body) as { password: unknown }).password;
       verifies.push({ token, xff, password });
-      if (opts.verifyDelayMs) await new Promise((r) => setTimeout(r, opts.verifyDelayMs));
+      if (opts.verifyDelayMs && (opts.slowPassword === undefined || password === opts.slowPassword)) {
+        await new Promise((r) => setTimeout(r, opts.verifyDelayMs));
+      }
       if (res.destroyed) return;
       if (opts.verifyMax !== undefined) {
         const key = (opts.trustXff && xff) || "peer";
@@ -93,7 +97,7 @@ export async function startFakeOxiCloud(
           return json(res, 429, { error: "Too many requests", retry_after_secs: 60 });
         }
       }
-      if (token === BROKEN_TOKEN) return json(res, 500, { error: "boom" });
+      if (token === BROKEN_TOKEN || /^err-\d+$/.test(token)) return json(res, 500, { error: "boom" });
       // pw-<n>: further password-protected shares, for limiter-capacity tests.
       if (token !== PW_TOKEN && !/^pw-\d+$/.test(token)) {
         return json(res, 404, { error: "not found" });
