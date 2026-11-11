@@ -343,7 +343,7 @@ describe("password rate limiting", () => {
       assert.equal(res.statusCode, 429, "was a 500 'Code: 429' page");
       assert.equal(res.headers["retry-after"], "60");
       assert.match(res.body, /Too many password attempts/);
-      assert.ok(!/429/.test(res.body.replace(/<script[^>]*><\/script>/g, "")));
+      assert.ok(!res.body.includes("429"), "the upstream status is not shown");
       assert.equal(fake.verifies.length, 3);
       // OxiCloud's window restarts on every request; do not feed it.
       assert.equal((await post(app, { password: PASSWORD, ip: "198.51.100.77" })).statusCode, 429);
