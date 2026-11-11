@@ -1,6 +1,6 @@
 {
   "name": "oxicloud-public-proxy",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Public reverse proxy for OxiCloud share links - exposes shares on a public domain while keeping OxiCloud private.",
   "type": "module",
   "main": "dist/server.js",
