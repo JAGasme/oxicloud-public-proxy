@@ -27,6 +27,8 @@ const en = {
   "password.button": "Unlock",
   "password.error.required": "Password is required.",
   "password.error.wrong": "Incorrect password. Please try again.",
+  "password.error.rate_limited":
+    "Too many password attempts right now. Please wait a minute and try again.",
   "password.show": "Show password",
   "password.hide": "Hide password",
   "expired.heading": "Link unavailable",
@@ -34,7 +36,6 @@ const en = {
   "error.heading": "Something went wrong",
   "error.body":
     "Try again in a moment. If the problem persists, contact the share owner.",
-  "error.code": "Code",
 } as const;
 
 export type Key = keyof typeof en;
@@ -61,6 +62,8 @@ const pl: Record<Key, string> = {
   "password.button": "Odblokuj",
   "password.error.required": "Hasło jest wymagane.",
   "password.error.wrong": "Nieprawidłowe hasło. Spróbuj ponownie.",
+  "password.error.rate_limited":
+    "Zbyt wiele prób podania hasła. Odczekaj minutę i spróbuj ponownie.",
   "password.show": "Pokaż hasło",
   "password.hide": "Ukryj hasło",
   "expired.heading": "Link niedostępny",
@@ -68,7 +71,6 @@ const pl: Record<Key, string> = {
   "error.heading": "Coś poszło nie tak",
   "error.body":
     "Spróbuj ponownie za chwilę. Jeśli problem się powtarza, skontaktuj się z właścicielem zasobu.",
-  "error.code": "Kod",
 };
 
 const DICT: Record<Lang, Record<Key, string>> = { en, pl };

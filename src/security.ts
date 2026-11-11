@@ -17,11 +17,11 @@ export const PAGE_CSP = [
   "base-uri 'none'",
 ].join("; ");
 
-// CSP for shared files streamed from OxiCloud. Their Content-Type is the
-// uploader's, so an HTML or SVG file opened inline would otherwise run its
-// scripts on the proxy's origin. Only scripting and framing are locked down:
-// a stricter default-src would break the browser's built-in PDF, image and
-// video viewers.
+// CSP for shared files the browser may render inline (see inlineSafe):
+// raster images, audio, video and PDF. None of them can carry markup or script
+// into the proxy's origin, so only scripting and framing are locked down: a
+// default-src (and with it object-src) or a sandbox would break Chrome's
+// built-in PDF viewer.
 export const FILE_CSP = [
   "script-src 'none'",
   "frame-ancestors 'none'",
@@ -29,14 +29,60 @@ export const FILE_CSP = [
   "form-action 'none'",
 ].join("; ");
 
+// CSP for every other shared file. These are always sent as attachments, so
+// the browser should never render them; if one is rendered anyway it gets an
+// opaque origin and may load nothing (no links out, no meta refresh target,
+// no CSS or remote images).
+export const ATTACHMENT_CSP = [
+  "default-src 'none'",
+  "sandbox",
+  "frame-ancestors 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+].join("; ");
+
+/**
+ * Whether an uploaded file of this Content-Type may be shown inline on the
+ * proxy's origin. The type is the uploader's, so anything that can carry
+ * markup (HTML, SVG, XML, text...) or is unknown is downloaded instead.
+ */
+export function inlineSafe(contentType: string | null): boolean {
+  const essence = (contentType ?? "").split(";", 1)[0]!.trim().toLowerCase();
+  const m = /^(image|video|audio)\/([a-z0-9.+-]+)$/.exec(essence);
+  if (m) return !/svg|xml|html/.test(m[2]!);
+  return essence === "application/pdf";
+}
+
+/** `attachment`, keeping whatever filename parameters OxiCloud sent. */
+export function asAttachment(contentDisposition: string | null): string {
+  if (!contentDisposition) return "attachment";
+  const m = /^\s*(?:inline|attachment)\s*(;.*)?$/is.exec(contentDisposition);
+  return m ? `attachment${m[1] ?? ""}` : "attachment";
+}
+
 export interface SecurityHeaderOptions {
   /** Strict-Transport-Security max-age in seconds; 0 disables the header. */
   hstsMaxAge: number;
 }
 
-/** Mark a reply as a pass-through of an uploaded file (see FILE_CSP). */
-export function markAsSharedFile(reply: FastifyReply): void {
-  reply.header("content-security-policy", FILE_CSP);
+/**
+ * Headers for a pass-through of an uploaded file: its type (octet-stream if
+ * OxiCloud sent none), a CSP, and, for anything not inlineSafe, a forced
+ * `Content-Disposition: attachment`.
+ */
+export function markAsSharedFile(
+  reply: FastifyReply,
+  contentType: string | null,
+  contentDisposition: string | null,
+): void {
+  reply.header("content-type", contentType ?? "application/octet-stream");
+  if (inlineSafe(contentType)) {
+    reply.header("content-security-policy", FILE_CSP);
+    if (contentDisposition !== null) reply.header("content-disposition", contentDisposition);
+  } else {
+    reply.header("content-security-policy", ATTACHMENT_CSP);
+    reply.header("content-disposition", asAttachment(contentDisposition));
+  }
 }
 
 export function registerSecurityHeaders(

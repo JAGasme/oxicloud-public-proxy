@@ -11,6 +11,8 @@
 // cookie), and attaches it to the upstream calls. The browser only ever holds
 // the per-share unlock cookie, exactly as with the old API.
 
+import { parseRetryAfter } from "./ratelimit.js";
+
 export interface ShareMetadata {
   id: string;
   item_id: string;
@@ -58,6 +60,7 @@ export type MetadataResult =
 export type VerifyResult =
   | { kind: "ok"; data: ShareMetadata; setCookies: string[] }
   | { kind: "wrong-password" }
+  | { kind: "rate-limited"; retryAfter: number | null }
   | { kind: "expired" }
   | { kind: "not-found" }
   | { kind: "upstream-error"; status: number; detail?: string };
@@ -97,14 +100,24 @@ export class UpstreamClient {
     return opened.kind === "ok" ? { kind: "ok", data: opened.share.meta } : opened;
   }
 
-  async verifyPassword(token: string, password: string): Promise<VerifyResult> {
+  /**
+   * `clientIp`, when given, is sent as the only X-Forwarded-For value (never
+   * the visitor's own header). OxiCloud uses it for its per-IP limiter only if
+   * this proxy's address is in OXICLOUD_TRUST_PROXY_CIDR.
+   */
+  async verifyPassword(token: string, password: string, clientIp?: string): Promise<VerifyResult> {
     const url = `${this.baseUrl}/api/s/${encodeURIComponent(token)}/verify`;
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    };
+    if (clientIp) headers["X-Forwarded-For"] = clientIp;
 
     let res: Response;
     try {
       res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        headers,
         body: JSON.stringify({ password }),
       });
     } catch (err) {
@@ -121,6 +134,10 @@ export class UpstreamClient {
       return { kind: "ok", data, setCookies };
     }
     if (res.status === 401) return { kind: "wrong-password" };
+    if (res.status === 429) {
+      await res.body?.cancel();
+      return { kind: "rate-limited", retryAfter: parseRetryAfter(res.headers.get("retry-after")) };
+    }
     if (res.status === 410) return { kind: "expired" };
     if (res.status === 404) return { kind: "not-found" };
     return { kind: "upstream-error", status: res.status, detail: await readDetail(res) };

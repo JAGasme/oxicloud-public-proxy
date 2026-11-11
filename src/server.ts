@@ -9,6 +9,10 @@ const app = await buildApp({
   upstream: new UpstreamClient(config.oxicloudInternalUrl),
   publicBaseUrl: config.publicBaseUrl,
   hstsMaxAge: config.hstsMaxAge,
+  trustProxy: config.trustProxy,
+  ...(config.clientIpHeader ? { clientIpHeader: config.clientIpHeader } : {}),
+  forwardClientIp: config.forwardClientIp,
+  authRateLimit: config.authRateLimit,
   logger: {
     level: config.logLevel,
     transport:
