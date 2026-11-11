@@ -23,6 +23,9 @@ export interface AuthRateLimit {
   /** Verify calls per OxiCloud rate-limit key before OxiCloud's window resets; 0 = off. */
   upstreamMax: number;
   upstreamWindowSecs: number;
+  /** Table sizes (see src/ratelimit.ts); not configurable by env, for tests. */
+  maxClientKeys?: number;
+  maxShareKeys?: number;
 }
 
 export const DEFAULT_AUTH_RATE_LIMIT: AuthRateLimit = {

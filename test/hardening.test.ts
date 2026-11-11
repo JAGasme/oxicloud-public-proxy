@@ -13,6 +13,7 @@ import { isSameOriginPost, scopeUnlockCookie } from "../src/routes/share.js";
 import {
   ATTACHMENT_CSP,
   FILE_CSP,
+  FORM_REFERRER_POLICY,
   asAttachment,
   inlineSafe,
 } from "../src/security.js";
@@ -545,7 +546,12 @@ describe("cross-site password posts", () => {
     ["no fetch metadata, Origin = request origin", { origin: "http://localhost:80" }, true],
     ["no fetch metadata, foreign Origin", { origin: "https://evil.example" }, false],
     ["no fetch metadata, look-alike Origin", { origin: "https://share.example.evil.example" }, false],
-    ["no fetch metadata, Origin: null", { origin: "null" }, true],
+    ["no fetch metadata, Origin: null (sandboxed or no-referrer form)", { origin: "null" }, false],
+    ["no fetch metadata, Origin: null with our Referer", { origin: "null", referer: `${PUBLIC}/` }, false],
+    ["no Origin, our Referer (pre-2019 browser)", { referer: `${PUBLIC}/` }, true],
+    ["no Origin, foreign Referer", { referer: "https://evil.example/page" }, false],
+    ["no Origin, malformed Referer", { referer: "not a url" }, false],
+    ["no Origin, data: Referer", { referer: "data:text/html,x" }, false],
     ["no headers (non-browser client)", {}, true],
   ];
   let fake: FakeOxiCloud;
@@ -584,6 +590,88 @@ describe("cross-site password posts", () => {
       host: "files.example",
     } as unknown as Parameters<typeof isSameOriginPost>[0];
     assert.equal(isSameOriginPost(req, PUBLIC), true);
+  });
+});
+
+describe("password page referrer policy", () => {
+  let app: FastifyInstance;
+  let close: () => Promise<void>;
+
+  before(async () => {
+    ({ app, close } = await setup({ limits: { perIp: 1 } }));
+  });
+  after(async () => close());
+
+  it("is strict-origin with a no-referrer fallback", () => {
+    assert.equal(FORM_REFERRER_POLICY, "no-referrer, strict-origin");
+    // The last understood value wins: never a policy that sends the path.
+    for (const v of FORM_REFERRER_POLICY.split(",").map((x) => x.trim())) {
+      assert.ok(["no-referrer", "strict-origin"].includes(v), v);
+    }
+  });
+
+  it("applies to every response carrying the password form", async () => {
+    const pages = [
+      await app.inject({ method: "GET", url: `/share/${PW_TOKEN}` }),
+      await app.inject({ method: "GET", url: `/share/${PW_TOKEN}/folder/sub-1` }),
+      await post(app, { password: "" }), // empty: re-rendered, no attempt used
+      await post(app), // wrong password
+      await post(app), // 429, per-IP limit of 1
+      await app.inject({
+        method: "POST",
+        url: `/share/${PW_TOKEN}/auth`,
+        headers: { "content-type": "application/json", "sec-fetch-site": "same-origin" },
+        payload: '{"password":[1]}',
+      }), // 400
+    ];
+    assert.deepEqual(
+      pages.map((r) => r.statusCode),
+      [200, 200, 200, 200, 429, 400],
+    );
+    for (const r of pages) {
+      assert.match(r.body, /<form method="post"/);
+      assert.equal(r.headers["referrer-policy"], FORM_REFERRER_POLICY);
+    }
+  });
+
+  it("everything else, including the unlock redirect, stays no-referrer", async () => {
+    const { app: a2, close: c2 } = await setup({
+      files: [{ id: "img-1", name: "a.jpg", mime_type: "image/jpeg" }],
+    });
+    try {
+      const responses = [
+        await a2.inject({ method: "GET", url: "/" }),
+        await a2.inject({ method: "GET", url: `/share/${TOKEN}` }), // gallery
+        await a2.inject({ method: "GET", url: `/share/${TOKEN}/file/img-1` }),
+        await a2.inject({ method: "GET", url: "/share/no-such-share" }),
+        await a2.inject({ method: "GET", url: "/nope" }),
+        await a2.inject({ method: "GET", url: `/s/${PW_TOKEN}` }),
+        await post(a2, { password: PASSWORD }), // 303 to the share
+        await post(a2, { headers: { "sec-fetch-site": "cross-site" } }), // 403
+      ];
+      assert.deepEqual(
+        responses.map((r) => r.statusCode),
+        [200, 200, 200, 410, 404, 301, 303, 403],
+      );
+      for (const r of responses) assert.equal(r.headers["referrer-policy"], "no-referrer");
+    } finally {
+      await c2();
+    }
+  });
+
+  it("the password page links nowhere but itself and the font host", async () => {
+    const html = (await app.inject({ method: "GET", url: `/share/${PW_TOKEN}` })).body;
+    const urls = [...html.matchAll(/\s(?:href|src|action)="([^"]*)"/g)].map((m) => m[1]!);
+    assert.ok(urls.length > 0);
+    for (const u of urls) {
+      const ok =
+        u.startsWith("/") && !u.startsWith("//")
+          ? true
+          : /^https:\/\/fonts\.(googleapis|gstatic)\.com(\/|$)/.test(u);
+      assert.ok(ok, `unexpected URL on the password page: ${u}`);
+    }
+    assert.ok(!/<meta[^>]+name="referrer"/i.test(html), "no meta policy overriding the header");
+    assert.ok(!/<a\s[^>]*href="https?:/i.test(html), "no external links");
   });
 });
 

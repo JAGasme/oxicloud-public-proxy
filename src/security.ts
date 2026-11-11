@@ -60,6 +60,20 @@ export function asAttachment(contentDisposition: string | null): string {
   return m ? `attachment${m[1] ?? ""}` : "attachment";
 }
 
+// Referrer policy for pages with the password form. Under `no-referrer` a
+// browser sends `Origin: null` on its own same-origin POST (Fetch spec), which
+// is indistinguishable from a sandboxed cross-site form. `strict-origin` makes
+// it send the real origin, while any Referer, to this site or another, is
+// still only the bare origin: the share token in the path never leaves. A
+// browser that does not know `strict-origin` uses the last value it does
+// know, `no-referrer`, and so never falls back to sending the full URL.
+export const FORM_REFERRER_POLICY = "no-referrer, strict-origin";
+
+/** Mark a reply as a page holding the password form (see FORM_REFERRER_POLICY). */
+export function markAsPasswordForm(reply: FastifyReply): void {
+  reply.header("referrer-policy", FORM_REFERRER_POLICY);
+}
+
 export interface SecurityHeaderOptions {
   /** Strict-Transport-Security max-age in seconds; 0 disables the header. */
   hstsMaxAge: number;
@@ -95,7 +109,7 @@ export function registerSecurityHeaders(
     }
     reply.header("x-content-type-options", "nosniff");
     // Share URLs carry the share token: never leak it to other sites.
-    reply.header("referrer-policy", "no-referrer");
+    if (!reply.hasHeader("referrer-policy")) reply.header("referrer-policy", "no-referrer");
     reply.header("x-frame-options", "DENY");
     reply.header("cross-origin-opener-policy", "same-origin");
     // HSTS only means something over HTTPS. Behind a TLS-terminating proxy

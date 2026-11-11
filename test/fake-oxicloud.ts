@@ -7,7 +7,7 @@ import type { AddressInfo } from "node:net";
 export const TOKEN = "tok-123";
 export const ROOT_FOLDER = "root-folder";
 export const RING = "oxi_shares=ring-abc";
-/** A password-protected folder share; its password is PASSWORD. */
+/** A password-protected folder share (as is any `pw-<n>`); its password is PASSWORD. */
 export const PW_TOKEN = "tok-pw";
 export const PASSWORD = "correct horse";
 export const UNLOCK = `oxi_share_unlock_${PW_TOKEN}=unlock-jwt`;
@@ -90,7 +90,10 @@ export async function startFakeOxiCloud(
         }
       }
       if (token === BROKEN_TOKEN) return json(res, 500, { error: "boom" });
-      if (token !== PW_TOKEN) return json(res, 404, { error: "not found" });
+      // pw-<n>: further password-protected shares, for limiter-capacity tests.
+      if (token !== PW_TOKEN && !/^pw-\d+$/.test(token)) {
+        return json(res, 404, { error: "not found" });
+      }
       if (password !== PASSWORD) return json(res, 401, { error: "wrong password" });
       res.setHeader("Set-Cookie", [
         `${UNLOCK}; HttpOnly; SameSite=Lax; Path=/; Max-Age=3600`,

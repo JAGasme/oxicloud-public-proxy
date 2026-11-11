@@ -169,8 +169,13 @@ then lock every visitor out of every password-protected share.
 The proxy refuses password checks itself, with `429` and `Retry-After`,
 before it forwards anything:
 
-- per client (`AUTH_RATE_LIMIT_PER_IP`) and per share
-  (`AUTH_RATE_LIMIT_PER_TOKEN`), counting failed attempts only;
+- per client (`AUTH_RATE_LIMIT_PER_IP`), counting failed attempts, unknown
+  tokens included;
+- per share (`AUTH_RATE_LIMIT_PER_TOKEN`), counting wrong passwords plus
+  checks in flight. A share is only recorded when OxiCloud answers 401, which
+  it does only for a real, unexpired, password-protected share. Made-up
+  tokens cannot fill this table, and a share under attack is never evicted
+  from it;
 - per OxiCloud rate-limit key (`UPSTREAM_VERIFY_MAX`), counting every check
   the way OxiCloud does, so OxiCloud's own limit is never reached. If OxiCloud
   answers `429` anyway, the proxy waits out its `Retry-After` and does not
@@ -197,6 +202,14 @@ for a window; that is the price of capping guesses per share.
 
 Limits:
 
+- The per-client and upstream tables hold 10,000 keys and then forget the
+  least recently used. That can reset a client's own budget, which is no
+  more than using another address, while the per-share limit still holds.
+  The per-share table holds 100,000 shares with recent wrong guesses. Past
+  that, new shares are refused (429) until entries expire, rather than
+  forgetting one under attack. Reaching it means wrong guesses at 100,000
+  real password-protected shares within one window. If a future OxiCloud
+  answered 401 for unknown tokens too, made-up tokens could fill it.
 - All counters are in memory, per proxy instance. Several instances behind
   one egress IP each spend their own budget, so divide
   `UPSTREAM_VERIFY_MAX` among them, or put the limit in the front proxy.
@@ -284,8 +297,19 @@ the override once `@fastify/static` depends on `glob >= 14.0.2`.
 - POST body size is capped at 64 KiB (the only POST is the password form).
   The password must be a single string of at most 1024 characters; anything
   else gets a `400` without reaching OxiCloud.
-- The password form refuses cross-site posts (`Sec-Fetch-Site`, else a foreign
-  `Origin`) with `403`, before rate limits or OxiCloud.
+- The password form refuses cross-site posts with `403`, before rate limits
+  or OxiCloud. It checks `Sec-Fetch-Site`; else `Origin`, where `null` (sent
+  by sandboxed and referrer-less cross-site forms) is refused; else a
+  foreign `Referer`. Requests with none of these, like non-browser clients,
+  are accepted. So are the oldest browsers (Firefox < 70 sends no `Origin`
+  on form posts) when an attacker's page also suppresses `Referer`; for
+  those, only the rate limits apply.
+- Pages with the password form send `Referrer-Policy: no-referrer,
+  strict-origin`, so the browser's own POST carries the real `Origin` and
+  not `null`. Any `Referer` they cause is the bare origin, to this site or
+  the font host, never the path with the share token. Browsers that don't
+  know `strict-origin` use `no-referrer`. Every other response stays
+  `no-referrer`.
 - Password checks are rate-limited before they reach OxiCloud; see
   [Client IPs and rate limits](#client-ips-and-rate-limits).
 - The unlock cookie OxiCloud issues after a correct password is relayed
