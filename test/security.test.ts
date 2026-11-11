@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
-import { FILE_CSP, PAGE_CSP } from "../src/security.js";
+import { ATTACHMENT_CSP, PAGE_CSP } from "../src/security.js";
 import { UpstreamClient } from "../src/upstream.js";
 import { type FakeOxiCloud, TOKEN, startFakeOxiCloud } from "./fake-oxicloud.js";
 
@@ -76,12 +76,14 @@ describe("security headers", () => {
     }
   });
 
-  it("blocks scripts in an uploaded HTML file served inline", async () => {
+  it("never renders an uploaded HTML file inline", async () => {
     const res = await app.inject({ method: "GET", url: `/share/${TOKEN}/file/evil-1` });
     assert.equal(res.statusCode, 200);
     assert.equal(res.headers["content-type"], "text/html");
-    assert.equal(res.headers["content-security-policy"], FILE_CSP);
-    assert.match(FILE_CSP, /script-src 'none'/);
+    assert.equal(res.headers["content-disposition"], 'attachment; filename="evil.html"');
+    assert.equal(res.headers["content-security-policy"], ATTACHMENT_CSP);
+    assert.match(ATTACHMENT_CSP, /default-src 'none'/);
+    assert.match(ATTACHMENT_CSP, /(^|; )sandbox(;|$)/);
   });
 
   it("omits HSTS on plain HTTP", async () => {
