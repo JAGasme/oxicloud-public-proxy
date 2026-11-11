@@ -265,9 +265,9 @@ describe("password checks in flight (slow or hung OxiCloud)", () => {
     }
   });
 
-  it("a hung OxiCloud times out, and every reservation is released", async () => {
-    const { app, close } = await setup({
-      limits: { maxConcurrent: 1, perToken: 1 },
+  it("a hung OxiCloud times out; the check counts, the slot is freed", async () => {
+    const { fake, app, close } = await setup({
+      limits: { maxConcurrent: 1, perToken: 2, perIp: 2 },
       fake: { verifyDelayMs: 5_000 },
       verifyTimeoutMs: 100,
     });
@@ -277,10 +277,26 @@ describe("password checks in flight (slow or hung OxiCloud)", () => {
       assert.ok(Date.now() - started < 2_000, "did not wait for OxiCloud");
       assert.equal(res.statusCode, 502);
       assert.match(res.body, /Something went wrong/);
-      // Not a failure for the share or the client, and the concurrency slot
-      // is free: the same client can try the same share again at once.
-      const again = await post(app, PW_TOKEN, "wrong", "203.0.113.90");
-      assert.equal(again.statusCode, 502, "reached OxiCloud again, not 429");
+      // The concurrency slot is free again at once...
+      assert.equal((await post(app, "pw-1", "wrong", "203.0.113.91")).statusCode, 502);
+      // ...but OxiCloud may have tested those passwords, so they count: the
+      // share has one check left, and so does the first client.
+      assert.equal((await post(app, PW_TOKEN, "wrong", "203.0.113.92")).statusCode, 502);
+      assert.equal((await post(app, PW_TOKEN, "wrong", "203.0.113.93")).statusCode, 429);
+      assert.equal((await post(app, "pw-2", "wrong", "203.0.113.90")).statusCode, 502);
+      assert.equal((await post(app, "pw-3", "wrong", "203.0.113.90")).statusCode, 429);
+      assert.equal(fake.verifies.length, 4);
+    } finally {
+      await close();
+    }
+  });
+
+  it("a 5xx from OxiCloud counts against the share and the client", async () => {
+    const { app, close } = await setup({ limits: { perToken: 1, perIp: 1 } });
+    try {
+      assert.equal((await post(app, "tok-500", "wrong", "203.0.113.95")).statusCode, 502);
+      assert.equal((await post(app, "tok-500", "wrong", "203.0.113.96")).statusCode, 429);
+      assert.equal((await post(app, "no-such", "wrong", "203.0.113.95")).statusCode, 429);
     } finally {
       await close();
     }

@@ -326,9 +326,12 @@ export async function shareRoutes(
         return rateLimited(budget.retryAfter);
       }
 
-      // Only a 401 counts against the share: OxiCloud sends it only for a
-      // real, unexpired, password-protected share (see ShareFailureLimiter).
-      let wrongPassword = false;
+      // What counts against the share: a 401, which OxiCloud sends only for a
+      // real, unexpired, password-protected share, and any check whose outcome
+      // is unknown (timeout, connection error, 5xx, a throw): OxiCloud may
+      // still have tested the password. Unknown, expired and password-less
+      // tokens and correct passwords do not (see ShareFailureLimiter).
+      let countsForShare = true;
       let result: Awaited<ReturnType<UpstreamClient["verifyPassword"]>>;
       verifyInFlight++;
       try {
@@ -337,13 +340,15 @@ export async function shareRoutes(
           password,
           deps.forwardClientIp ? ip : undefined,
         );
-        wrongPassword = result.kind === "wrong-password";
+        countsForShare = result.kind === "wrong-password" || result.kind === "upstream-error";
       } finally {
         verifyInFlight--;
-        byToken.done(wrongPassword);
+        byToken.done(countsForShare);
       }
-      // Unknown and expired tokens still count against the visitor.
-      if (result.kind === "ok" || result.kind === "rate-limited" || result.kind === "upstream-error") {
+      // Against the visitor, everything but a correct password and a 429
+      // (OxiCloud's limiter answers before testing anything) counts, unknown
+      // tokens included.
+      if (result.kind === "ok" || result.kind === "rate-limited") {
         byIp.release();
       }
 

@@ -105,10 +105,12 @@ export type Attempt =
  * Unlike the per-client limit, this one must not forget a share that is
  * being guessed, or flooding the table with other keys would buy more
  * guesses. So:
- *  - a token is only recorded on a failure OxiCloud confirms (`done(true)`),
- *    i.e. a 401, which OxiCloud returns only for an existing, unexpired,
- *    password-protected share. Unknown, expired and password-less tokens
- *    never enter the table, and a flood of made-up tokens cannot fill it;
+ *  - a token is only recorded (`done(true)`) on a 401, which OxiCloud returns
+ *    only for an existing, unexpired, password-protected share, or on a check
+ *    whose outcome is unknown (timeout, error), since OxiCloud may still have
+ *    tested the password. Unknown, expired and password-less tokens that
+ *    OxiCloud answers never enter the table, so a flood of made-up tokens
+ *    cannot fill it (timeouts are bounded by the in-flight cap);
  *  - checks in flight are counted separately and always removed when they
  *    finish, so concurrent requests cannot overshoot `max` or fill the table;
  *  - live entries are never evicted. Past `maxKeys` live shares, NEW shares
