@@ -41,10 +41,10 @@ Multi-arch images (`linux/amd64`, `linux/arm64`) are published to GHCR on
 every release, with an SBOM, build provenance and a cosign signature:
 
 ```bash
-docker pull ghcr.io/jagasme/oxicloud-public-proxy:2.0.1
+docker pull ghcr.io/jagasme/oxicloud-public-proxy:2.1.0
 ```
 
-Tags: the full version (`2.0.1`), plus `2.0` and `2`, which move to the
+Tags: the full version (`2.1.0`), plus `2.1` and `2`, which move to the
 newest release in that line. There is no `latest` tag.
 Pin by digest for reproducible deploys; each
 [release](https://github.com/JAGasme/oxicloud-public-proxy/releases) lists the

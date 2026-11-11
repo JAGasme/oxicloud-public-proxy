@@ -12,7 +12,7 @@ body:
     attributes:
       label: Proxy version
       description: Image tag, or the `version` from the "listening" startup log line.
-      placeholder: 2.0.1
+      placeholder: 2.1.0
     validations:
       required: true
   - type: input

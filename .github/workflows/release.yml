@@ -1,7 +1,7 @@
 name: Release
 
 # Push a tag matching package.json "version", e.g.:
-#   git tag v2.0.1 && git push origin v2.0.1
+#   git tag v2.1.0 && git push origin v2.1.0
 # Publishes ghcr.io/<owner>/oxicloud-public-proxy for amd64 + arm64, signs it
 # with cosign (keyless), and creates a GitHub Release with generated notes.
 
