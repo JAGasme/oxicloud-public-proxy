@@ -140,6 +140,7 @@ there. The proxy itself does not terminate TLS.
 | `AUTH_RATE_LIMIT_WINDOW_SECS` | `60` | no | Window for the two limits above. |
 | `UPSTREAM_VERIFY_MAX` | `8` | no | Password checks the proxy sends OxiCloud per OxiCloud rate-limit key before OxiCloud's window can reset. Keep it below `OXICLOUD_RATE_LIMIT_LOGIN_MAX` (default 10). `0` disables. |
 | `UPSTREAM_VERIFY_WINDOW_SECS` | `60` | no | Set to OxiCloud's `OXICLOUD_RATE_LIMIT_LOGIN_WINDOW_SECS`. |
+| `AUTH_MAX_CONCURRENT` | `16` | no | Password checks waiting on OxiCloud at once, from all clients together; more get `429` with `Retry-After: 1`. Each check is also cut off after 10 s. `0` disables the cap. |
 | `UPSTREAM_FORWARD_CLIENT_IP` | `false` | no | Send the visitor's IP (as resolved above, never the visitor's own header) to OxiCloud as `X-Forwarded-For` on password checks. Enable only together with `OXICLOUD_TRUST_PROXY_CIDR` on OxiCloud; see below. |
 
 See `.env.example` for a copy-and-edit starting point.
@@ -210,6 +211,12 @@ Limits:
   forgetting one under attack. Reaching it means wrong guesses at 100,000
   real password-protected shares within one window. If a future OxiCloud
   answered 401 for unknown tokens too, made-up tokens could fill it.
+- Checks in flight are capped (`AUTH_MAX_CONCURRENT`) and time out after
+  10 s, so a slow or hung OxiCloud cannot pile up requests and limiter
+  state. The cap is shared: with forwarding on, clients who keep 16 checks
+  in flight against a slow OxiCloud delay everyone else's by about a
+  second at a time. Without forwarding, the upstream budget already keeps
+  fewer checks in flight.
 - All counters are in memory, per proxy instance. Several instances behind
   one egress IP each spend their own budget, so divide
   `UPSTREAM_VERIFY_MAX` among them, or put the limit in the front proxy.

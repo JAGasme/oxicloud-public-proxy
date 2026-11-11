@@ -23,6 +23,8 @@ export interface AuthRateLimit {
   /** Verify calls per OxiCloud rate-limit key before OxiCloud's window resets; 0 = off. */
   upstreamMax: number;
   upstreamWindowSecs: number;
+  /** Password checks waiting on OxiCloud at once, across all clients; 0 = off. */
+  maxConcurrent: number;
   /** Table sizes (see src/ratelimit.ts); not configurable by env, for tests. */
   maxClientKeys?: number;
   maxShareKeys?: number;
@@ -35,6 +37,7 @@ export const DEFAULT_AUTH_RATE_LIMIT: AuthRateLimit = {
   // OxiCloud's default is 10 per 60 s (OXICLOUD_RATE_LIMIT_LOGIN_MAX/_WINDOW_SECS).
   upstreamMax: 8,
   upstreamWindowSecs: 60,
+  maxConcurrent: 16,
 };
 
 function required(name: string): string {
@@ -82,6 +85,7 @@ export function loadConfig(): Config {
       DEFAULT_AUTH_RATE_LIMIT.upstreamWindowSecs,
       1,
     ),
+    maxConcurrent: intEnv("AUTH_MAX_CONCURRENT", DEFAULT_AUTH_RATE_LIMIT.maxConcurrent, 0),
   };
 
   return {

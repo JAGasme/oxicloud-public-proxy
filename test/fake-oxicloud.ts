@@ -25,6 +25,8 @@ export interface FakeOptions {
   verifyMax?: number;
   trustXff?: boolean;
   fileShare?: FakeResource;
+  /** Delay every /verify answer by this long (a slow OxiCloud). */
+  verifyDelayMs?: number;
 }
 
 export interface VerifyCall {
@@ -80,6 +82,8 @@ export async function startFakeOxiCloud(
       const xff = req.headers["x-forwarded-for"] as string | undefined;
       const password = (JSON.parse(body) as { password: unknown }).password;
       verifies.push({ token, xff, password });
+      if (opts.verifyDelayMs) await new Promise((r) => setTimeout(r, opts.verifyDelayMs));
+      if (res.destroyed) return;
       if (opts.verifyMax !== undefined) {
         const key = (opts.trustXff && xff) || "peer";
         const count = (counters.get(key) ?? 0) + 1;

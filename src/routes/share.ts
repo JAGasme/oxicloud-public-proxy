@@ -52,6 +52,11 @@ export async function shareRoutes(
     Date.now,
     limits.maxShareKeys,
   );
+  // Password checks currently waiting on OxiCloud. Bounds the reservations
+  // (and requests) a slow or hung OxiCloud can pile up, and the Argon2id work
+  // a burst can put on it. Without UPSTREAM_FORWARD_CLIENT_IP the upstream
+  // budget already keeps this lower.
+  let verifyInFlight = 0;
   const upstreamBudget = new UpstreamBudget(
     limits.upstreamMax,
     limits.upstreamWindowSecs * 1000,
@@ -305,6 +310,12 @@ export async function shareRoutes(
         byIp.release();
         return rateLimited(byToken.retryAfter);
       }
+      if (limits.maxConcurrent > 0 && verifyInFlight >= limits.maxConcurrent) {
+        byIp.release();
+        byToken.done(false);
+        req.log.warn({ verifyInFlight }, "password check held back: too many in flight");
+        return rateLimited(1);
+      }
       // The key OxiCloud's own limiter will count this request under.
       const upstreamKey = deps.forwardClientIp ? ip : "proxy";
       const budget = upstreamBudget.acquire(upstreamKey);
@@ -319,6 +330,7 @@ export async function shareRoutes(
       // real, unexpired, password-protected share (see ShareFailureLimiter).
       let wrongPassword = false;
       let result: Awaited<ReturnType<UpstreamClient["verifyPassword"]>>;
+      verifyInFlight++;
       try {
         result = await upstream.verifyPassword(
           token,
@@ -327,6 +339,7 @@ export async function shareRoutes(
         );
         wrongPassword = result.kind === "wrong-password";
       } finally {
+        verifyInFlight--;
         byToken.done(wrongPassword);
       }
       // Unknown and expired tokens still count against the visitor.

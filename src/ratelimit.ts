@@ -116,7 +116,8 @@ export type Attempt =
  *    more than `maxKeys` distinct real password-protected shares in one
  *    window. Checks in flight do not count towards that capacity (else a
  *    concurrent burst of made-up tokens could fill it), so it can be
- *    overshot by at most the number of checks in flight.
+ *    overshot by at most the number of checks in flight, which the route
+ *    caps (AUTH_MAX_CONCURRENT) and the upstream timeout ends.
  */
 export class ShareFailureLimiter {
   private readonly failures = new Map<string, number[]>();

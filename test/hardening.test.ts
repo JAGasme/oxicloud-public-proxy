@@ -42,6 +42,7 @@ const NO_LIMITS: AuthRateLimit = {
   windowSecs: 60,
   upstreamMax: 0,
   upstreamWindowSecs: 60,
+  maxConcurrent: 0,
 };
 
 async function setup(

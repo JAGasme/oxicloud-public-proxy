@@ -5,7 +5,7 @@ import { buildApp } from "../src/app.js";
 import type { AuthRateLimit } from "../src/config.js";
 import { ShareFailureLimiter, SlidingWindowLimiter } from "../src/ratelimit.js";
 import { UpstreamClient } from "../src/upstream.js";
-import { PASSWORD, PW_TOKEN, startFakeOxiCloud } from "./fake-oxicloud.js";
+import { type FakeOptions, PASSWORD, PW_TOKEN, startFakeOxiCloud } from "./fake-oxicloud.js";
 
 // The per-share password limit must hold however the limiter tables are
 // filled: with made-up tokens, with real password-protected shares, or with
@@ -104,6 +104,7 @@ const LIMITS: AuthRateLimit = {
   windowSecs: 60,
   upstreamMax: 0,
   upstreamWindowSecs: 60,
+  maxConcurrent: 0,
   maxClientKeys: 20,
   maxShareKeys: 20,
 };
@@ -124,13 +125,15 @@ function post(app: FastifyInstance, token: string, password = "wrong", ip = fres
   });
 }
 
-async function setup() {
-  const fake = await startFakeOxiCloud([]);
+async function setup(
+  opts: { limits?: Partial<AuthRateLimit>; fake?: FakeOptions; verifyTimeoutMs?: number } = {},
+) {
+  const fake = await startFakeOxiCloud([], opts.fake);
   const app = await buildApp({
-    upstream: new UpstreamClient(fake.url),
+    upstream: new UpstreamClient(fake.url, opts.verifyTimeoutMs),
     publicBaseUrl: "https://share.example",
     forwardClientIp: true,
-    authRateLimit: LIMITS,
+    authRateLimit: { ...LIMITS, ...opts.limits },
   });
   const capTarget = async () => {
     for (let i = 0; i < 3; i++) assert.equal((await post(app, PW_TOKEN)).statusCode, 200);
@@ -213,6 +216,71 @@ describe("per-share limit under table saturation (UPSTREAM_FORWARD_CLIENT_IP=tru
         assert.equal((await post(app, `no-such-${i}`, "x", ip)).statusCode, 410);
       }
       assert.equal((await post(app, "no-such-5", "x", ip)).statusCode, 429);
+    } finally {
+      await close();
+    }
+  });
+});
+
+describe("password checks in flight (slow or hung OxiCloud)", () => {
+  it("caps concurrent checks across all clients and tokens", async () => {
+    const { fake, app, close } = await setup({
+      limits: { maxConcurrent: 2, perToken: 100 },
+      fake: { verifyDelayMs: 200 },
+    });
+    try {
+      const results = await Promise.all(
+        Array.from({ length: 8 }, (_, i) => post(app, i % 2 ? PW_TOKEN : `pw-${i}`)),
+      );
+      const codes = results.map((r) => r.statusCode);
+      assert.equal(codes.filter((c) => c === 200).length, 2);
+      const refused = results.filter((r) => r.statusCode === 429);
+      assert.equal(refused.length, 6);
+      for (const r of refused) assert.equal(r.headers["retry-after"], "1");
+      assert.equal(fake.verifies.length, 2, "refused checks never reached OxiCloud");
+      // Slots are free again once the checks finish.
+      assert.equal((await post(app, PW_TOKEN)).statusCode, 200);
+    } finally {
+      await close();
+    }
+  });
+
+  it("the cap reserves nothing for refused checks", async () => {
+    const { app, close } = await setup({
+      limits: { maxConcurrent: 1, perToken: 2 },
+      fake: { verifyDelayMs: 100 },
+    });
+    try {
+      const ip = "203.0.113.77";
+      const [first, second] = await Promise.all([
+        post(app, PW_TOKEN, "wrong", ip),
+        post(app, PW_TOKEN, "wrong", ip),
+      ]);
+      assert.deepEqual([first.statusCode, second.statusCode].sort(), [200, 429]);
+      // One failure recorded for the share and the client; one attempt each left.
+      assert.equal((await post(app, PW_TOKEN, "wrong", ip)).statusCode, 200);
+      assert.equal((await post(app, PW_TOKEN, "wrong", "203.0.113.78")).statusCode, 429);
+    } finally {
+      await close();
+    }
+  });
+
+  it("a hung OxiCloud times out, and every reservation is released", async () => {
+    const { app, close } = await setup({
+      limits: { maxConcurrent: 1, perToken: 1 },
+      fake: { verifyDelayMs: 5_000 },
+      verifyTimeoutMs: 100,
+    });
+    try {
+      const started = Date.now();
+      const res = await post(app, PW_TOKEN, "wrong", "203.0.113.90");
+      assert.ok(Date.now() - started < 2_000, "did not wait for OxiCloud");
+      assert.equal(res.statusCode, 502);
+      assert.match(res.body, /Something went wrong/);
+      // Not a failure for the share or the client, and the concurrency slot
+      // is free: the same client can try the same share again at once.
+      const again = await post(app, PW_TOKEN, "wrong", "203.0.113.90");
+      assert.equal(again.statusCode, 502, "reached OxiCloud again, not 429");
     } finally {
       await close();
     }

@@ -84,12 +84,19 @@ const CACHE_MAX = 500;
 // /resources is cursor-paginated (max 200 per page). Bound the walk so one
 // enormous folder cannot pin the proxy.
 const PAGE_LIMIT = 200;
+// A password check holds rate-limit reservations until it finishes, so it
+// must finish: a hung OxiCloud would otherwise pin them (and the request)
+// forever. Argon2id verification normally takes well under a second.
+export const VERIFY_TIMEOUT_MS = 10_000;
 const MAX_PAGES = 50;
 
 export class UpstreamClient {
   private readonly cache = new Map<string, OpenShare>();
 
-  constructor(private readonly baseUrl: string) {}
+  constructor(
+    private readonly baseUrl: string,
+    private readonly verifyTimeoutMs = VERIFY_TIMEOUT_MS,
+  ) {}
 
   // ── Share login ──────────────────────────────────────────────────────────
 
@@ -119,6 +126,7 @@ export class UpstreamClient {
         method: "POST",
         headers,
         body: JSON.stringify({ password }),
+        signal: AbortSignal.timeout(this.verifyTimeoutMs),
       });
     } catch (err) {
       return upstreamError(err);
